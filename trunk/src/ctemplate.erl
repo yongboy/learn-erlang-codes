@@ -1,6 +1,6 @@
 %% Author: Administrator
 %% Created: 2012-8-28
-%% Description: TODO: Add description to ctemplate
+%% Description: 并发编程
 -module(ctemplate).
 
 %%
