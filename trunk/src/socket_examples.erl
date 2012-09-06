@@ -7,10 +7,9 @@
 %%  Visit http://www.pragmaticprogrammer.com/titles/jaerlang for more book information.
 %%---
 -module(socket_examples).
-%%-compile(export_all).
--import(lists, [reverse/1]).
 -compile(export_all).
-%%-export([nano_get_url/0, nano_get_url/1])
+-import(lists, [reverse/1]).
+
 
 nano_get_url() ->
     nano_get_url("www.google.com").
@@ -28,6 +27,8 @@ receive_data(Socket, SoFar) ->
 	    list_to_binary(reverse(SoFar)) %% (5)
     end.
 
+
+
 nano_client_eval(Str) ->
     {ok, Socket} = 
 	gen_tcp:connect("localhost", 2345,
@@ -40,6 +41,8 @@ nano_client_eval(Str) ->
 	    io:format("Client result = ~p~n",[Val]),
 	    gen_tcp:close(Socket)
     end.
+
+
 
 start_nano_server() ->
     {ok, Listen} = gen_tcp:listen(2345, [binary, {packet, 4},  %% (6)
@@ -62,6 +65,8 @@ loop(Socket) ->
 	{tcp_closed, Socket} ->
 	    io:format("Server socket closed~n")
     end.
+
+
 
 error_test() ->
     spawn(fun() -> error_test_server() end),
@@ -86,3 +91,4 @@ error_test_server_loop(Socket) ->
 	    atom_to_list(Data),
 	    error_test_server_loop(Socket)
     end.
+
