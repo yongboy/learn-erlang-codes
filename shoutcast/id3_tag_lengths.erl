@@ -39,21 +39,21 @@ file(File) ->
 read_id3_tag(File) ->
     case file:open(File, [read,binary,raw]) of
         {ok, S} ->
-	    Size = filelib:file_size(File),
-            Result = analyse(S, Size),
-	    file:close(S),
-	    Result;
+		    Size = filelib:file_size(File),
+			Result = analyse(S, Size),
+		    file:close(S),
+		    Result;
         _Error ->
             error
     end.
 
 analyse(S, Size) ->
     case (catch analyse1(S, Size)) of
-	{'EXIT', _Why} ->
-	    io:format("_Why=~p~n",[_Why]),
-	    error;
-	StartStop ->
-	    StartStop
+		{'EXIT', _Why} ->
+		    io:format("_Why=~p~n",[_Why]),
+		    error;
+		StartStop ->
+		    StartStop
     end.
 
 analyse1(S, Size) ->
@@ -62,11 +62,11 @@ analyse1(S, Size) ->
     {Type, StartUntrust} = parse_start_tag(Bin),
     Stop = parse_end_tag(S, Size),
     if 
-	StartTrust == StartUntrust ->
-	    true;
-	true ->
-	    io:format("** error in header code:  real=~p Type=~p Val=~p~n",
-		      [StartTrust, Type, StartUntrust])
+		StartTrust == StartUntrust ->
+		    true;
+		true ->
+		    io:format("** error in header code:  real=~p Type=~p Val=~p~n",
+			      [StartTrust, Type, StartUntrust])
     end,
     {StartTrust, Stop}.
 
