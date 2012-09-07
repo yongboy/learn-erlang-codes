@@ -8,21 +8,32 @@ start() ->
     spawn(fun() -> 
 		  start_parallel_server(9000),
 		  %% now go to sleep - otherwise the listening socket will be closed
-		  lib_misc:sleep(infinity)
+		  sleep(infinity)
 	  end).
 
+sleep(T) ->
+    receive
+    after T ->
+       true
+    end.
+
 start_parallel_server(Port) -> 
-	%%{packet, 0}Erlang系统会把TCP数据原封不动直接传递给应用程序
+	%% {packet, 0}Erlang系统会把TCP数据原封不动直接传递给应用程序
     {ok, Listen} = gen_tcp:listen(Port, [binary, {packet, 0}, {reuseaddr, true}, {active, true}]),
+	%% create a song server -- this just knows about all our music
     PidSongServer = spawn(fun() -> songs() end),
     spawn(fun() -> par_connect(Listen, PidSongServer) end).
 
+%% spawn one of these processes  per connection
 par_connect(Listen, PidSongServer) ->
     {ok, Socket} = gen_tcp:accept(Listen),
+	%% when accept returns spawn a new process to wait for the next connection
     spawn(fun() -> par_connect(Listen, PidSongServer) end),
     inet:setopts(Socket, [{packet, 0}, binary, {nodelay, true}, {active, true}]),
+	%% deal with the request
     get_request(Socket, PidSongServer, []).
 
+%% wait for the TCP request
 get_request(Socket, PidSongServer, L) ->
     receive
 		{tcp, Socket, Bin} ->
@@ -46,13 +57,18 @@ get_request(Socket, PidSongServer, L) ->
 split("\r\n\r\n" ++ T, L) -> {reverse(L), T};
 split([H|T], L)           -> split(T, [H|L]);
 split([], _)              -> more.
-    
+
+%% we got the request -- send a reply
 got_request_from_client(Request, Socket, PidSongServer) ->
+	io:format("request is ~p~n", [Request]),
     Cmds = string:tokens(Request, "\r\n"),
     Cmds1 = map(fun(I) -> string:tokens(I, " ") end, Cmds),
+	io:format("Cmds1 is ~p~n", [Cmds1]),
     is_request_for_stream(Cmds1),
     gen_tcp:send(Socket, [response()]),
     play_songs(Socket, PidSongServer, <<>>).
+
+is_request_for_stream(_) -> true.
 
 response() ->
     ["ICY 200 OK\r\n",
@@ -67,6 +83,7 @@ response() ->
      "icy-metaint: ", integer_to_list(?CHUNKSIZE), "\r\n",
      "icy-br: 96\r\n\r\n"]. 
 
+%% play songs forever or until the client quits
 play_songs(Socket, PidSongServer, SoFar) ->
     Song = rpc(PidSongServer, random_song),
     {File, PrintStr, Header} = unpack_song_descriptor(Song),
@@ -79,6 +96,27 @@ play_songs(Socket, PidSongServer, SoFar) ->
 		    SoFar1 = send_file(S, {0, Header}, Start, Stop, Socket, SoFar),
 		    file:close(S),
 		    play_songs(Socket, PidSongServer, SoFar1)
+    end.
+
+rpc(Pid, Q) ->
+    Pid ! {self(), Q},
+    receive
+		{Pid, Reply} ->
+		    Reply
+    end.
+
+songs() ->
+    {ok,[SongList]} = file:consult("mp3data.tmp"),
+    lib_misc:random_seed(),
+    songs_loop(SongList).
+
+songs_loop(SongList) ->
+    receive
+		{From, random_song} ->
+		    I = random:uniform(length(SongList)),
+		    Song = lists:nth(I, SongList),
+		    From ! {self(), Song},
+		    songs_loop(SongList)
     end.
 
 send_file(S, Header, OffSet, Stop, Socket, SoFar) ->
@@ -122,37 +160,13 @@ the_header({K, H}) ->
 		_ -> <<0>>
     end.
 
-is_request_for_stream(_) -> true.
-
-songs() ->
-    {ok,[SongList]} = file:consult("mp3data.tmp"),
-    lib_misc:random_seed(),
-    songs_loop(SongList).
-
-songs_loop(SongList) ->
-    receive
-		{From, random_song} ->
-		    I = random:uniform(length(SongList)),
-		    Song = lists:nth(I, SongList),
-		    From ! {self(), Song},
-		    songs_loop(SongList)
-    end.
-
-rpc(Pid, Q) ->
-    Pid ! {self(), Q},
-    receive
-		{Pid, Reply} ->
-		    Reply
-    end.
-
-unpack_song_descriptor({File, {_Tag,Info}}) ->
+unpack_song_descriptor({File, {_Tag, Info}}) ->
     PrintStr = list_to_binary(make_header1(Info)),
-    L1 = ["StreamTitle='",PrintStr,
-	  "';StreamUrl='http://localhost:9000';"],
+    L1 = ["StreamTitle='", PrintStr, "';StreamUrl='http://localhost:9000';"],
     %% io:format("L1=~p~n",[L1]),
     Bin = list_to_binary(L1),
     Nblocks = ((size(Bin) - 1) div 16) + 1,
-    NPad = Nblocks * 16 - size(Bin), 
+    NPad = Nblocks * 16 - size(Bin),
     Extra = lists:duplicate(NPad, 0),
     Header = list_to_binary([Nblocks, Bin, Extra]),
     %% Header is the Shoutcast header
