@@ -1,0 +1,3 @@
+Comet web chat (with MochiWeb)
+http://yoan.dosimple.ch/blog/2008/05/15/
+chat.zip 为源代码
